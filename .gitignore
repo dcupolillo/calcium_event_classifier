@@ -1,0 +1,11 @@
+# cache files
+*.pyc
+*.pyo
+.vscode
+.ipynb_checkpoints/
+.spyproject/
+__pycache__/
+*.tmp
+core/train_model.py
+dataset/*.h5
+models/
