@@ -51,6 +51,7 @@ def plot_confusion_matrix(
     ax.set_xlabel("Predicted", fontsize=fontsize)
     ax.set_ylabel("True", fontsize=fontsize)
     ax.tick_params('both', labelsize=fontsize)
+    ax.spines[:].set_visible(True)
 
 
 def plot_sorted_traces_by_probability(
@@ -425,3 +426,54 @@ def plot_roc_curves(trial_curves: list):
     # Hide empty subplots
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
+
+
+def prob_distribution(
+        labels: list or np.ndarray,
+        predictions: list or np.ndarray
+) -> None:
+    """
+    Plot the distribution of probability of being class 1,
+    divided by original class label.
+
+    Parameters
+    ----------
+    labels : np.ndarray
+        Original sample label.
+    predictions : np.ndarray
+        Predicted sample probability.
+
+    Returns
+    -------
+    None
+        DESCRIPTION.
+
+    """
+    if not isinstance(labels, np.ndarray):
+        labels = np.array(labels)
+
+    if not isinstance(predictions, np.ndarray):
+        predictions = np.array(predictions)
+
+    fig, ax = plt.subplots(constrained_layout=True)
+
+    ax.hist(
+        predictions[labels == 0.0],
+        bins=50,
+        alpha=0.6,
+        color="mediumblue",
+        label="Class 0")
+    ax.hist(
+        predictions[labels == 1.0],
+        bins=50,
+        alpha=0.6,
+        color="crimson",
+        label="Class 1")
+
+    ax.set(
+        xlabel="Predicted Probability",
+        ylabel="Frequency",
+        title="Predicted Probabilities by True Class",
+        xlim=(0., 1.))
+
+    ax.legend()

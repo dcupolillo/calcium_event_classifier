@@ -4,7 +4,7 @@
 import numpy as np
 import torch
 from torch.utils.data import (
-    DataLoader, SubsetRandomSampler)
+    DataLoader, SubsetRandomSampler, WeightedRandomSampler)
 from sklearn.model_selection import train_test_split
 import random
 
@@ -69,8 +69,7 @@ def split(
 
     dataset_size = len(dataset)
     indices = list(range(dataset_size))
-    labels = torch.tensor(
-        [int(dataset[i][1].item()) for i in indices], dtype=torch.long)
+    labels = dataset.get_labels().long()
 
     assert round(train_fraction + validation_fraction) == 1.
 
@@ -87,7 +86,19 @@ def split(
          random_state=seed
      )
 
-    train_sampler = SubsetRandomSampler(train_indices)
+    # train_sampler = SubsetRandomSampler(train_indices)
+    # val_sampler = SubsetRandomSampler(val_indices)
+
+    class_counts = torch.bincount(labels)
+    class_weights = 1.0 / class_counts.float()
+    sample_weights = class_weights[labels]
+    train_sample_weights = sample_weights[train_indices]
+
+    train_sampler = WeightedRandomSampler(
+        weights=train_sample_weights,
+        num_samples=len(train_indices),
+        replacement=True
+    )
     val_sampler = SubsetRandomSampler(val_indices)
 
     train_loader = DataLoader(
@@ -95,6 +106,7 @@ def split(
         batch_size=batch_size,
         sampler=train_sampler,
     )
+
     valid_loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -114,7 +126,8 @@ def split(
               f" → {len(train_loader)} batches")
         print(f"   - Label 0: {train_0} ({train_0 / len(train_indices):.2%})"
               f" | Label 1: {train_1} ({train_1 / len(train_indices):.2%})")
-        print(f"Validation: {len(val_indices)} samples ({validation_fraction:.2%})"
+        print(f"Validation: {len(val_indices)} samples "
+              f"({validation_fraction:.2%})"
               f" → {len(valid_loader)} batches")
         print(f"   - Label 0: {val_0} ({val_0 / len(val_indices):.2%})"
               f" |  Label 1: {val_1} ({val_1 / len(val_indices):.2%})")
@@ -154,11 +167,6 @@ def load_test_dataset(
     return test_loader
 
 
-def compute_l1_regularization(model):
-    l1_norm = sum(p.abs().sum() for p in model.parameters())
-    return l1_norm
-
-
 def get_predictions_and_labels(
         model,
         data_loader,
@@ -170,8 +178,15 @@ def get_predictions_and_labels(
 
     with torch.no_grad():
         for data, target in data_loader:
-            data = data.float().unsqueeze(1).to(device)
-            target = target.float().to(device)
+
+            if data.ndim == 2:
+                data = data.unsqueeze(1).float()  # (B, T) → (B, 1, T)
+            elif data.ndim == 3:
+                data = data.float()
+
+            target = target.float()
+
+            data, target = data.to(device), target.to(device)
 
             # Forward pass
             predicted = model.forward(data)

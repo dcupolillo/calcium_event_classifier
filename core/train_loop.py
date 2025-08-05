@@ -1,7 +1,6 @@
 """ Created on Tue Jul  8 14:46:08 2025
     @author: dcupolillo """
 
-import zscore_classifier as zsc
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -9,10 +8,14 @@ import torch.nn as nn
 import copy
 import time
 from tqdm import tqdm
-from zscore_classifier.core.utils import compute_l1_regularization
 from sklearn.metrics import (
     f1_score, precision_recall_curve, average_precision_score)
 import numpy as np
+
+
+def compute_l1_regularization(model) -> float:
+
+    return sum(p.abs().sum() for p in model.parameters())
 
 
 def train(
@@ -23,6 +26,8 @@ def train(
         device: str,
         epochs: int,
         learning_rate: float,
+        lr_drop_factor: float,
+        lr_drop_patience: int,
         lambda1: float,
         lambda2: float,
         patience: int,
@@ -79,8 +84,8 @@ def train(
         Corresponding labels for latent features (if available).
     """
 
-
     model.to(device)
+
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=learning_rate,
@@ -90,8 +95,8 @@ def train(
     scheduler = ReduceLROnPlateau(
         optimizer,
         mode='min',
-        factor=0.5,  # drop factor
-        patience=5,
+        factor=lr_drop_factor,
+        patience=lr_drop_patience,
         verbose=True
     )
 
@@ -100,7 +105,7 @@ def train(
     validation_precision, validation_recall, best_thresholds = [], [], []
     validation_auc_pr = []
 
-    epoch_features = []  # ← NEW
+    epoch_features = []
     epoch_labels = []
 
     best_loss = float('inf')
@@ -125,15 +130,23 @@ def train(
         for data, target in tqdm(
                 train_loader, desc=f"Training Epoch {epoch+1}/{epochs}"):
 
+            if data.ndim == 2:
+                data = data.unsqueeze(1).float()  # (B, T) → (B, 1, T)
+            elif data.ndim == 3:
+                data = data.float()  # already [B, C, T]
+
             # Change dtype before sending to device
-            data = data.float().unsqueeze(1).to(device)
-            target = target.float().view(-1, 1).to(device)
+            # data = data.float().unsqueeze(1).to(device)
+            target = target.float().view(-1, 1)
+
+            data, target = data.to(device), target.to(device)
 
             optimizer.zero_grad()
 
             # Forward pass
-            output = model(data)
-            loss = criterion(output, target)
+            logits = model(data)
+            loss = criterion(logits, target)
+            probs = torch.sigmoid(logits)
 
             l1_norm = compute_l1_regularization(model)
             loss += lambda1 * l1_norm
@@ -144,11 +157,10 @@ def train(
             loss.backward()  # Backpropagate
             optimizer.step()  # Update weights
 
-            # Get accuracy
-            all_preds.extend(output.detach().cpu().numpy().flatten())
+            all_preds.extend(probs.detach().cpu().numpy().flatten())
             all_targets.extend(target.detach().cpu().numpy().flatten())
 
-        # Compute average loss and accuracy for training across batches
+        # Compute average loss and prec./recall for training across batches
         avg_train_loss = running_loss / total_train_samples
         train_loss.append(avg_train_loss)
 
@@ -176,25 +188,27 @@ def train(
 
             for data, target in valid_loader:
 
-                data = data.float()
-                data = data.unsqueeze(1)
+                if data.ndim == 2:  # [B, T]
+                    data = data.unsqueeze(1)  # → [B, 1, T]
+                elif data.ndim == 3:
+                    data = data  # already [B, C, T]
+
                 target = target.float()
                 target = target.view(-1, 1)
                 data, target = data.to(device), target.to(device)
 
-                features, output = model(data, return_features=True)
+                features, logits = model(data, return_features=True)
+                loss = criterion(logits, target)
+                probs = torch.sigmoid(logits)
 
-                # output = model.forward(data)
-
-                loss = criterion(output, target)
                 running_loss += loss.item() * data.size(0)
                 total_valid_samples += data.size(0)
 
-                all_preds.extend(output.detach().cpu().numpy().flatten())
+                all_preds.extend(probs.detach().cpu().numpy().flatten())
                 all_targets.extend(target.detach().cpu().numpy().flatten())
                 all_feats.append(features.cpu())
 
-        # Compute average loss and accuracy for validation
+        # Compute average loss and prec./recall for validation
         avg_valid_loss = running_loss / total_valid_samples
         validation_loss.append(avg_valid_loss)
 
@@ -239,8 +253,10 @@ def train(
             f"🔵 Train loss: {avg_train_loss:.2f} | "
             f"🟢 Val loss: {avg_valid_loss:.2f} | "
             f"🎯 Val F1: {validation_f1[-1]:.3f} @ thr={best_threshold:.2f} | "
-            f"🔻 Prec: {validation_precision[-1]:.3f}, Rec: {validation_recall[-1]:.3f} | "
+            f"🔻 Prec: {validation_precision[-1]:.3f}, "
+            f"Rec: {validation_recall[-1]:.3f} | "
             f"🏆 Best loss: {best_loss:.2f}"
+
         )
 
     end_time = time.time()

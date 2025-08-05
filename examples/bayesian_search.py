@@ -1,7 +1,6 @@
 """ Created on Tue Jul  8 13:28:16 2025
     @author: dcupolillo """
 
-import zscore_classifier as zsc
 from zscore_classifier.core.optimization_objective import objective
 import zscore_classifier.core.plot as zsc_plot
 import optuna
@@ -10,27 +9,28 @@ import flammkuchen as fl
 import torch.nn as nn
 import time
 
+
 # Initialize device and random seed for reproducibility
-device = zsc.set_device()
-seed = zsc.set_seed(42)
 train_fraction, validation_fraction = 0.75, 0.25
-epochs = 300
-patience = 8
+epochs = 200
+patience = 12
 bayesian_opt_trials = 30
 
 # Loss function
-criterion = nn.BCELoss()
+# criterion = nn.BCELoss()
+criterion = nn.BCEWithLogitsLoss()
 
 # Initialize dataset
 data_path = Path(
-    r"neuralnetwork/zscore_decoder/datasets/bigger_zscore_labels.h5")
+    r"datasets/250724_dataset_filtered.h5")
 data = fl.load(data_path)
-
-dataset = zsc.ZScoreDataset(data)
 
 # Create optimization search
 trial_curves = {}
 study = optuna.create_study(directions=["minimize", "maximize"])
+
+destination = Path(r"C:/Users/dcupolillo/Desktop/test")
+destination.mkdir(parents=True, exist_ok=True)
 
 # Start search
 start_time = time.time()
@@ -46,7 +46,8 @@ study.optimize(
         trial=trial,
         trial_curves=trial_curves,
         return_keys=["validation_loss", "validation_f1"],
-        reductions=[min, max]
+        reductions=[min, max],
+        models_destination=destination,
     ),
     n_trials=bayesian_opt_trials)
 

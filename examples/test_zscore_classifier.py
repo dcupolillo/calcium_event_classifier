@@ -11,7 +11,9 @@ import numpy as np
 device = zsc.set_device()
 
 # Load model
-model_path = Path(r"models/unfiltered_model.pth")
+model_path = Path(
+    # r"models/unfiltered_model.pth")
+    r"models/trial_22_model.pth")
 checkpoint = torch.load(model_path)
 
 classifier = zsc.ZScoreClassifier(
@@ -29,7 +31,18 @@ classifier = zsc.ZScoreClassifier(
     pooling_type=checkpoint['hyperparams']["pooling_type"],
     leaky_relu_negative_slope=checkpoint['hyperparams'][
         "leaky_relu_negative_slope"],
+    num_groups=checkpoint["hyperparams"]["num_groups"]
 ).to(device)
+
+for name, param in classifier.named_parameters():
+    if param.requires_grad:
+        print(f"{name} - shape: {param.shape}")
+        print(param.data)
+
+for name, param in classifier.named_parameters():
+    if param.requires_grad:
+        print(f"{name} | mean: {param.data.mean():.4f}, "
+              f"std: {param.data.std():.4f}")
 
 # Initialize test dataset
 test_data_path = Path(
@@ -38,7 +51,6 @@ test_data = fl.load(test_data_path)
 
 test_dataset = zsc.ZScoreDataset(
     test_data,
-    event_range=None,
     augment=False,
 )
 
@@ -48,13 +60,15 @@ test_loader = zsc.load_test_dataset(
     summary=False)
 
 classifier.load_state_dict(checkpoint['model_state_dict'])
-classifier.eval()
 
 # Inference on test dataset
-labels, predictions = zsc.get_predictions_and_labels(
+labels, logits = zsc.get_predictions_and_labels(
     classifier,
     test_loader,
     device)
+
+predictions = torch.sigmoid(torch.Tensor(logits)).to("cpu").numpy()
+labels = np.array(labels)
 
 # Binarize predictions using best F1 threshold
 best_f1 = max(checkpoint["validation_f1"])
@@ -67,3 +81,7 @@ zsc_plot.plot_confusion_matrix(
     labels,
     predicted_classes,
     classes=["No Event", "Event"])
+
+# Inspect class distribution
+zsc_plot.prob_distribution(
+    labels, predictions)

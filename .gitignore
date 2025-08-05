@@ -6,6 +6,9 @@
 .spyproject/
 __pycache__/
 *.tmp
+
+# dataset files
+*.hdf5
 core/train_model.py
 dataset/*.h5
 models/

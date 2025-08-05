@@ -5,75 +5,13 @@ import flammkuchen as fl
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
-import random
-from itertools import chain
-
-#%% Re-organiza a h5 file
-
-
-def process_h5(
-        h5_file: str or Path
-) -> dict:
-    """
-    Structure the raw data  into a workable format.
-
-    Parameters
-    ----------
-    h5_file : str or Path
-        The input dataset.
-
-    Returns
-    -------
-    dict
-        the output dictionary with organized data.
-
-    """
-
-    labels = h5_file['binary_decision']
-    excluded_traces = h5_file['excluded_traces']
-    included_traces = h5_file['included_traces']
-    timestamps = h5_file['timestamps']
-
-    included_counter = 0
-    excluded_counter = 0
-
-    z_scores = []
-    selected_timestamps = []
-
-    for label in labels:
-        if label == 0:
-            z_scores.append(excluded_traces[excluded_counter])
-            selected_timestamps.append(timestamps[excluded_counter])
-            excluded_counter += 1
-        else:
-            z_scores.append(included_traces[included_counter])
-            selected_timestamps.append(timestamps[included_counter])
-            included_counter += 1
-
-    h5_dictionary = {
-        'label': np.array(labels),
-        'ts': np.array(selected_timestamps, dtype=np.float32),
-        'zscore': np.array(z_scores, dtype=np.float32)
-    }
-
-    return h5_dictionary
-
-
-# Usage
-file_to_load = r"class_1_to_add_to_test.h5"
-output_filename = r"test_dataset_250530.h5"
-
-h5_file = fl.load(file_to_load)
-h5_dictionary = process_h5(h5_file)
-
-fl.save(output_filename, h5_dictionary)
 
 
 # %% Take only traces labeled as '1'
 
 
 def filter_h5(
-        h5_file: str or Path,
+        h5_path: str or Path,
         label: int
 ) -> dict:
     """
@@ -92,23 +30,32 @@ def filter_h5(
         The filtered dictionary.
 
     """
+    ok_labels = [0, 1]
 
-    if label not in [0, 1]:
-        raise ValueError(f"Incorrect label {label}. Should be either 0 or 1.")
+    if label not in ok_labels:
+        raise ValueError(f"Incorrect label {label}. Should be {ok_labels}.")
+
+    if not isinstance(h5_path, (str, Path)):
+        raise TypeError("Input must be a string or a Path object.")
+
+    h5_file = fl.load(h5_path)
+
+    if not isinstance(label, int):
+        raise TypeError("Label must be an integer.")
+
+    if 'label' not in h5_file or 'zscore' not in h5_file:
+        raise KeyError("Input file must contain 'label' and 'zscore' keys.")
 
     labels = h5_file['label']
-    timestamps = h5_file['ts']
     z_scores = h5_file['zscore']
 
     filtered_indices = (labels == label)
 
     filtered_labels = labels[filtered_indices]
-    filtered_timestamps = timestamps[filtered_indices]
     filtered_z_scores = z_scores[filtered_indices]
 
     h5_dictionary = {
         'label': filtered_labels,
-        'ts': filtered_timestamps,
         'zscore': filtered_z_scores
     }
 
@@ -116,11 +63,10 @@ def filter_h5(
 
 
 # Usage
-file_to_load = r"test_dataset_250530.h5"
-output_filename = r"filtered_dataset_label1_250530.h5"
+file_to_load = Path(r"test_dataset_250530.h5")
+output_filename = Path(r"filtered_dataset_label1_250530.h5")
 
-file = fl.load(file_to_load)
-h5_dictionary = filter_h5(file, 1)
+h5_dictionary = filter_h5(file_to_load, 1)
 fl.save(output_filename, h5_dictionary)
 
 
@@ -128,8 +74,8 @@ fl.save(output_filename, h5_dictionary)
 
 
 def merge_h5(
-        h5_file_1: str or Path,
-        h5_file_2: str or Path
+        h5_path_1: str or Path,
+        h5_path_2: str or Path
 ) -> dict:
     """
     Concatenates two given datasets.
@@ -145,16 +91,23 @@ def merge_h5(
     -------
     dict
         The merged dictionary from the two files.
-
     """
+    if not (isinstance(h5_path_1, (str, Path)) and
+            isinstance(h5_path_2, (str, Path))):
+        raise TypeError(
+            "Both inputs must be a string or a Path object.")
+
+    h5_file_1 = fl.load(h5_path_1)
+    h5_file_2 = fl.load(h5_path_2)
+
+    if 'label' not in h5_file_1 or 'label' not in h5_file_2:
+        raise KeyError("Both files must contain 'label' key.")
+    if 'zscore' not in h5_file_1 or 'zscore' not in h5_file_2:
+        raise KeyError("Both files must contain 'zscore' key.")
 
     merged_labels = np.concatenate(
         [h5_file_1['label'],
          h5_file_2['label']])
-
-    merged_timestamps = np.concatenate(
-        [h5_file_1['ts'],
-         h5_file_2['ts']])
 
     merged_z_scores = np.concatenate(
         [h5_file_1['zscore'],
@@ -162,7 +115,6 @@ def merge_h5(
 
     h5_dictionary = {
         'label': merged_labels,
-        'ts': merged_timestamps,
         'zscore': merged_z_scores
     }
 
@@ -170,14 +122,11 @@ def merge_h5(
 
 
 # Usage
-file_1 = fl.load(
-    r"test_dataset_250224.h5")
-file_2 = fl.load(
-    r"filtered_dataset_label1_250530.h5")
-output_filename = (
-    r"merged_zscore_labels.h5")
+file_path_1 = Path(r"datasets/250724_dataset_filtered.h5")
+file_path_2 = Path(r"datasets/unfiltered_zscores.h5")
+output_filename = Path(r"datasets/250725_merged_dataset.h5")
 
-h5_dictionary = merge_h5(file_1, file_2)
+h5_dictionary = merge_h5(file_path_1, file_path_2)
 fl.save(output_filename, h5_dictionary)
 
 
@@ -185,7 +134,7 @@ fl.save(output_filename, h5_dictionary)
 
 
 def find_duplicates(
-        h5_file: str or Path
+        h5_path: str or Path
 ) -> list:
     """
     Finds the indices of duplicate traces within a dataset.
@@ -202,6 +151,10 @@ def find_duplicates(
         The list of duplicate indices.
 
     """
+    if not isinstance(h5_path, (str, Path)):
+        raise TypeError("Input must be a string or a Path object.")
+
+    h5_file = fl.load(h5_path)
 
     z_scores = h5_file['zscore']
     traces_as_tuples = [tuple(trace) for trace in z_scores]
@@ -243,13 +196,11 @@ def remove_duplicates(
 
     # Filter the arrays using unique indices
     unique_labels = h5_file['label'][unique_index]
-    unique_timestamps = h5_file['ts'][unique_index]
     unique_z_scores = h5_file['zscore'][unique_index]
 
     # Create new dictionary with unique entries
     unique_data = {
         'label': unique_labels,
-        'ts': unique_timestamps,
         'zscore': unique_z_scores
     }
 
@@ -257,8 +208,8 @@ def remove_duplicates(
 
 
 # Usage
-file = fl.load(r"zscore_labels.h5")
-unique_file = remove_duplicates(file)
+file_path = Path(r"zscore_labels.h5")
+unique_file = remove_duplicates(file_path)
 
 fl.save("unique_zscore_labels.h5", unique_file)
 
@@ -295,8 +246,18 @@ def reduce_class_entries(
     if label not in [0, 1]:
         raise ValueError(f"Invalid label {label}. Expected 0 or 1.")
 
+    if not isinstance(h5_file, (str, Path)):
+        raise TypeError("Input must be a string or a Path object.")
+
+    h5_file = fl.load(h5_file)
+
+    if 'label' not in h5_file or 'zscore' not in h5_file:
+        raise KeyError("Input file must contain 'label' and 'zscore' keys.")
+
+    if not isinstance(target_count, int) or target_count <= 0:
+        raise ValueError("target_count must be a positive integer.")
+
     labels = h5_file['label']
-    timestamps = h5_file['ts']
     z_scores = h5_file['zscore']
 
     # Identify indices by class
@@ -320,16 +281,15 @@ def reduce_class_entries(
     # Filter the arrays
     reduced_data = {
         'label': labels[final_indices],
-        'ts': timestamps[final_indices],
         'zscore': z_scores[final_indices]
     }
 
     return reduced_data
 
 
-file = fl.load("merged_zscore_labels.h5")
-reduced = reduce_class_entries(file, label=0, target_count=270)
-fl.save("test_dataset_250530_ratio_3_1.h5", reduced)
+file_path = Path(r"datasets/250724_dataset_filtered1.h5")
+reduced = reduce_class_entries(file_path, label=0, target_count=1000)
+fl.save("datasets/250724_dataset_equal_classes.h5", reduced)
 
 
 # %% Examine a dataset
@@ -351,6 +311,23 @@ def examine_h5(
     None
 
     """
+    if not isinstance(h5_file, (str, Path)):
+        raise TypeError("Input must be a string or a Path object.")
+
+    h5_file = fl.load(h5_file)
+
+    if 'label' not in h5_file or 'zscore' not in h5_file:
+        raise KeyError(
+            "Input file must contain 'label' and 'zscore' keys.")
+
+    if not (isinstance(h5_file['label'], np.ndarray) or
+            not isinstance(h5_file['zscore'], np.ndarray)):
+        raise TypeError(
+            "Both 'label' and 'zscore' must be numpy arrays.")
+
+    if len(h5_file['label']) != len(h5_file['zscore']):
+        raise ValueError(
+            "'label' and 'zscore' arrays must have the same length.")
 
     total_traces = len(h5_file['label'])
     zero_traces = (h5_file['label'] == 0).sum()
@@ -361,46 +338,78 @@ def examine_h5(
     print(f"Number of 1-labeled entries: {one_traces}")
 
     fig, axes = plt.subplots(
-        2, 1,
+        2, 2,
         figsize=(3, 5),
         sharex=True, sharey=True,
         layout="constrained")
 
-    axes[0].set_ylabel(f"0-labeled:\n{zero_traces} / {total_traces}")
-    axes[1].set_ylabel(f"1-labeled:\n{one_traces} / {total_traces}")
+    axes[0, 0].set_ylabel(f"0-labeled:\n{zero_traces} / {total_traces}")
+    axes[1, 0].set_ylabel(f"1-labeled:\n{one_traces} / {total_traces}")
 
-    zero_label_traces = [
+    zero_label_zscores = [
         h5_file['zscore'][i] for i in range(total_traces)
         if h5_file['label'][i] == 0]
 
-    one_label_traces = [
+    one_label_zscores = [
         h5_file['zscore'][i] for i in range(total_traces)
         if h5_file['label'][i] == 1]
 
-    mean_zero = np.mean(zero_label_traces, axis=0)
-    mean_one = np.mean(one_label_traces, axis=0)
+    zero_label_dFF = [
+        h5_file['dff'][i] for i in range(total_traces)
+        if h5_file['label'][i] == 0]
+
+    one_label_dFF = [
+        h5_file['dff'][i] for i in range(total_traces)
+        if h5_file['label'][i] == 1]
+
+    mean_zero_zscores = np.mean(zero_label_zscores, axis=0)
+    mean_one_zscores = np.mean(one_label_zscores, axis=0)
+    mean_zero_dFF = np.mean(zero_label_dFF, axis=0)
+    mean_one_dFF = np.mean(one_label_dFF, axis=0)
 
     for i, label in enumerate(h5_file['label']):
+        # Use data point indices as x-axis (consistent with GUI plotting)
+        x_data = np.arange(len(h5_file['zscore'][i]))
 
-        axes[0 if label == 0 else 1].plot(
-            h5_file['ts'][i],
+        axes[(0, 0) if label == 0 else (1, 0)].plot(
+            x_data,
             h5_file['zscore'][i],
+            color='lightgray',
+            alpha=0.6)
+        axes[(0, 1) if label == 0 else (1, 1)].plot(
+            x_data,
+            h5_file['dff'][i],
             color='lightgray',
             alpha=0.6)
 
     # Overlay means
-    for n, mean in enumerate([mean_zero, mean_one]):
-        axes[n].plot(
-            h5_file['ts'][0],
-            mean,
-            color='mediumblue' if n == 0 else "crimson",
-            linewidth=2,
-            label=f'Mean {n}-labeled')
+    for n, mean in enumerate([mean_zero_zscores, mean_one_zscores]):
+        if len(mean) > 0:  # Only plot if there are traces for this label
+            x_data = np.arange(len(mean))
+            axes[n, 0].plot(
+                x_data,
+                mean,
+                color='mediumblue' if n == 0 else "crimson",
+                linewidth=2,
+                label=f'Mean {n}-labeled')
+    for n, mean in enumerate([mean_zero_dFF, mean_one_dFF]):
+        if len(mean) > 0:  # Only plot if there are traces for this label
+            x_data = np.arange(len(mean))
+            axes[n, 1].plot(
+                x_data,
+                mean,
+                color='mediumblue' if n == 0 else "crimson",
+                linewidth=2,
+                label=f'Mean {n}-labeled')
+
+    # Set x-axis labels
+    axes[0, 0].set_xlabel('Data Points')
+    axes[0, 1].set_xlabel('Data Points')
 
 
 # Usage
-file = fl.load(r"test_dataset_250530_ratio_3_1.h5")
-examine_h5(file)
+file_path = Path(r"datasets/250729_dataset_2channels.h5")
+examine_h5(file_path)
 
 
 # %% Balance 0 and 1 labels
@@ -423,9 +432,25 @@ def balance_labels(
         The balanced dictionary.
 
     """
+    if not isinstance(h5_file, (str, Path)):
+        raise TypeError("Input must be a string or a Path object.")
+
+    h5_file = fl.load(h5_file)
+
+    if 'label' not in h5_file or 'zscore' not in h5_file:
+        raise KeyError(
+            "Input file must contain 'label' and 'zscore' keys.")
+
+    if not (isinstance(h5_file['label'], np.ndarray) or
+            not isinstance(h5_file['zscore'], np.ndarray)):
+        raise TypeError(
+            "Both 'label' and 'zscore' must be numpy arrays.")
+
+    if len(h5_file['label']) != len(h5_file['zscore']):
+        raise ValueError(
+            "'label' and 'zscore' arrays must have the same length.")
 
     labels = h5_file['label']
-    timestamps = h5_file['ts']
     z_scores = h5_file['zscore']
 
     one_indices = np.where(labels == 1)[0]
@@ -445,7 +470,6 @@ def balance_labels(
 
     balanced_data = {
         'label': labels[balanced_indices],
-        'ts': timestamps[balanced_indices],
         'zscore': z_scores[balanced_indices]
     }
 
@@ -453,77 +477,7 @@ def balance_labels(
 
 
 # Usage
-file = fl.load(r"zscore_labels.h5")
-balanced_file = balance_labels(file)
+file_path = Path(r"zscore_labels.h5")
+balanced_file = balance_labels(file_path)
 
 fl.save("balanced_zscore_labels.h5", balanced_file)
-
-
-# %% Take new 1-labeled traces
-
-# Initialize lists to store combined traces and timestamps for all segmenters
-all_traces_combined = []
-all_ts_combined = []
-
-for segmenter in segmenter_list:
-    # Flatten the BLA and CA3 predictions
-    predictions_BLA = list(chain.from_iterable(segmenter.calcium_events_binary_BLA))
-    predictions_CA3 = list(chain.from_iterable(segmenter.calcium_events_binary_CA3))
-
-    # Get indices where predictions > 0
-    indices_BLA = [n for n, pred in enumerate(predictions_BLA) if pred > 0]
-    indices_CA3 = [n for n, pred in enumerate(predictions_CA3) if pred > 0]
-
-    # Ensure non-overlapping random indices
-    try:
-        random_indices_BLA = random.sample(indices_BLA, 60)
-        random_indices_CA3 = random.sample(
-            [idx for idx in indices_CA3 if idx not in random_indices_BLA], 60
-        )
-    except ValueError:
-        random_indices_BLA = random.sample(indices_BLA, 40)
-        random_indices_CA3 = random.sample(
-            [idx for idx in indices_CA3 if idx not in random_indices_BLA], 40
-        )
-
-    # Flatten calcium event traces and timestamps
-    calcium_events_BLA = np.array(list(chain.from_iterable(segmenter.batch_z_scores_BLA)))
-    batch_ts_BLA = np.array(list(chain.from_iterable(segmenter.batch_ts_BLA)))
-    calcium_events_CA3 = np.array(list(chain.from_iterable(segmenter.batch_z_scores_CA3)))
-    batch_ts_CA3 = np.array(list(chain.from_iterable(segmenter.batch_ts_CA3)))
-
-    # Extract traces and timestamps using indices
-    traces_BLA = calcium_events_BLA[random_indices_BLA]
-    ts_BLA = batch_ts_BLA[random_indices_BLA]
-
-    traces_CA3 = calcium_events_CA3[random_indices_CA3]
-    ts_CA3 = batch_ts_CA3[random_indices_CA3]
-
-    # Combine the traces and timestamps for this segmenter
-    traces_combined = np.concatenate((traces_BLA, traces_CA3), axis=0)
-    ts_combined = np.concatenate((ts_BLA, ts_CA3), axis=0)
-
-    # Append to global lists
-    all_traces_combined.append(traces_combined)
-    all_ts_combined.append(ts_combined)
-
-# Concatenate all segmenter results into final arrays
-final_traces_combined = np.concatenate(all_traces_combined, axis=0)
-final_ts_combined = np.concatenate(all_ts_combined, axis=0)
-
-# Create combined labels
-num_samples = final_traces_combined.shape[0]  # Total number of samples
-labels = np.ones(num_samples, dtype=np.int32)  # All labels set to 1
-
-# Convert traces and timestamps to appropriate NumPy arrays
-zscore = np.array(final_traces_combined, dtype=np.float32)  # Z-score traces
-ts = np.array(final_ts_combined, dtype=np.float32)          # Timestamps
-
-# Create the structured dictionary
-data_dict = {
-    'label': labels,
-    'ts': ts,
-    'zscore': zscore
-}
-
-fl.save("1-labeled_zscore_only.h5", data_dict)

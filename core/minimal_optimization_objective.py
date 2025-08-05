@@ -1,4 +1,4 @@
-""" Created on Tue Jul  8 13:33:18 2025
+""" Created on July 28, 2025
     @author: dcupolillo """
 
 import zscore_classifier as zsc
@@ -7,11 +7,12 @@ import torch
 import torch.nn as nn
 from pathlib import Path
 import optuna
+from core.simpler_model import MinimalClassifier
 
 
-def get_default_limits() -> dict:
+def get_minimal_default_limits() -> dict:
     """
-    Return optimized sampling ranges for all tunable hyperparameters.
+    Return optimized sampling ranges for MinimalClassifier hyperparameters.
 
     Returns
     -------
@@ -19,54 +20,44 @@ def get_default_limits() -> dict:
         Dictionary mapping each hyperparameter name to a tuple or list.
     """
     return {
-        "learning_rate": (1e-5, 5e-3),
+        # Training parameters
+        "learning_rate": (1e-5, 1e-2),
         "lr_drop_factor": (0.1, 0.7),
         "lr_drop_patience": (2, 8, 1),
-        "lambda1": (1e-6, 1e-3),
-        "lambda2": (1e-6, 1e-4),
+        "lambda1": (1e-7, 1e-3),
+        "lambda2": (1e-7, 1e-4),
 
-        "dropout": (0.05, 0.5),
-        "augment_probability": (0.1, 0.5),
-        "noise_level": (0.01, 0.3),
+        # Data augmentation
+        "augment_probability": (0.0, 0.5),
+        "noise_level": (0.01, 0.2),
 
-        # Convolutional architecture
-        "out_channels_conv1": (16, 48, 8),
-        "out_channels_conv2": (32, 96, 16),
-        "out_channels_conv3": (64, 128, 16),
-        "out_channels_conv4": (64, 128, 16),
+        # Minimal architecture parameters
+        "conv1_channels": (16, 64, 8),
+        "conv2_channels": (16, 64, 8),
+        "conv1_kernel": (3, 9, 2),
+        "conv2_kernel": (3, 7, 2),
+        "pool_kernel": (2, 4, 1),
 
-        "kernel_size_conv1": (3, 9, 2),
-        "kernel_size_conv2": (3, 7, 2),
-        "kernel_size_conv3": (3, 5, 2),
-        "kernel_size_conv4": (3, 5, 2),
+        # Regularization
+        "dropout_rate": (0.1, 0.5),
+        "leaky_relu_negative_slope": (0.01, 0.1),
 
-        # Fully connected
-        "fc1_out_features": (32, 96, 16),
-        "fc2_out_features": (32, 96, 16),
-
-        # Other architectural components
-        "pooling_type": ["avg", "max"],
-
-        # Activation
-        "leaky_relu_negative_slope": (0.01, 0.1),  # avoid very low slopes
-        "num_groups": (4, 12, 4),
-
-        # Training-related
-        "batch_size": (16, 64, 16),
+        # Training parameters
+        "batch_size": (16, 128, 16),
         "random_seed": (0, 42, 7),
     }
 
 
-def resolve(
-    param: any,
-    name: str,
-    suggest_fn: callable,
-    **kwargs
+def resolve_minimal(
+        param: any,
+        name: str,
+        suggest_fn: callable,
+        **kwargs
 ) -> any:
     """
     Helper function to resolve whether a value from Optuna is a tuple;
     otherwise return the fixed value.
-    Allows to search space only for certain parameteres.
+    Allows to search space only for certain parameters.
 
     Parameters
     ----------
@@ -84,19 +75,18 @@ def resolve(
     any
         Sampled or fixed hyperparameter value.
     """
-
     if isinstance(param, tuple):
         return suggest_fn(name, *param, **kwargs)
     else:
         return param
 
 
-def define_search_space(
+def define_minimal_search_space(
         trial: Trial,
         **params: dict
 ) -> dict:
     """
-    Return a dictionary of hyperparameters, sampled or fixed.
+    Return a dictionary of hyperparameters for MinimalClassifier.
 
     Parameters
     ----------
@@ -111,82 +101,75 @@ def define_search_space(
     dict
         Dictionary of hyperparameter values.
     """
-
-    defaults = get_default_limits()
+    defaults = get_minimal_default_limits()
     for key in defaults:
         if key not in params:
             params[key] = defaults[key]
 
     return {
+        # Training parameters
         "learning_rate":
-            resolve(params["learning_rate"], "learning_rate",
-                    trial.suggest_float, log=True),
+            resolve_minimal(params["learning_rate"], "learning_rate",
+                            trial.suggest_float, log=True),
         "lr_drop_factor":
-            resolve(params["lr_drop_factor"], "lr_drop_factor",
-                    trial.suggest_float),
+            resolve_minimal(params["lr_drop_factor"], "lr_drop_factor",
+                            trial.suggest_float),
         "lr_drop_patience":
-            resolve(params["lr_drop_patience"], "lr_drop_patience",
-                    trial.suggest_int),
+            resolve_minimal(params["lr_drop_patience"], "lr_drop_patience",
+                            trial.suggest_int),
         "lambda1":
-            resolve(params["lambda1"], "lambda1",
-                    trial.suggest_float, log=True),
+            resolve_minimal(params["lambda1"], "lambda1",
+                            trial.suggest_float, log=True),
         "lambda2":
-            resolve(params["lambda2"], "lambda2",
-                    trial.suggest_float, log=True),
-        "dropout":
-            resolve(params["dropout"], "dropout", trial.suggest_float),
+            resolve_minimal(params["lambda2"], "lambda2",
+                            trial.suggest_float, log=True),
+
+        # Data augmentation
         "augment_probability":
-            resolve(params["augment_probability"], "augment_probability",
-                    trial.suggest_float),
-        "noise_level": resolve(params["noise_level"], "noise_level",
-                               trial.suggest_float),
-        "out_channels_conv1":
-            resolve(params["out_channels_conv1"], "out_channels_conv1",
-                    trial.suggest_int),
-        "out_channels_conv2":
-            resolve(params["out_channels_conv2"], "out_channels_conv2",
-                    trial.suggest_int),
-        "out_channels_conv3":
-            resolve(params["out_channels_conv3"], "out_channels_conv3",
-                    trial.suggest_int),
-        "out_channels_conv4":
-            resolve(params["out_channels_conv4"], "out_channels_conv4",
-                    trial.suggest_int),
-        "kernel_size_conv1":
-            resolve(params["kernel_size_conv1"],
-                    "kernel_size_conv1", trial.suggest_int),
-        "kernel_size_conv2":
-            resolve(params["kernel_size_conv2"], "kernel_size_conv2",
-                    trial.suggest_int),
-        "kernel_size_conv3":
-            resolve(params["kernel_size_conv3"], "kernel_size_conv3",
-                    trial.suggest_int),
-        "kernel_size_conv4":
-            resolve(params["kernel_size_conv4"], "kernel_size_conv4",
-                    trial.suggest_int),
-        "fc1_out_features":
-            resolve(params["fc1_out_features"], "fc1_out_features",
-                    trial.suggest_int),
-        "fc2_out_features":
-            resolve(params["fc2_out_features"], "fc2_out_features",
-                    trial.suggest_int),
-        "pooling_type":
-            trial.suggest_categorical(
-                "pooling_type", params["pooling_type"]),
+            resolve_minimal(params["augment_probability"],
+                            "augment_probability",
+                            trial.suggest_float),
+        "noise_level":
+            resolve_minimal(params["noise_level"], "noise_level",
+                            trial.suggest_float),
+
+        # Architecture parameters
+        "conv1_channels":
+            resolve_minimal(params["conv1_channels"], "conv1_channels",
+                            trial.suggest_int),
+        "conv2_channels":
+            resolve_minimal(params["conv2_channels"], "conv2_channels",
+                            trial.suggest_int),
+        "conv1_kernel":
+            resolve_minimal(params["conv1_kernel"], "conv1_kernel",
+                            trial.suggest_int),
+        "conv2_kernel":
+            resolve_minimal(params["conv2_kernel"], "conv2_kernel",
+                            trial.suggest_int),
+        "pool_kernel":
+            resolve_minimal(params["pool_kernel"], "pool_kernel",
+                            trial.suggest_int),
+
+        # Regularization
+        "dropout_rate":
+            resolve_minimal(params["dropout_rate"], "dropout_rate",
+                            trial.suggest_float),
         "leaky_relu_negative_slope":
-            resolve(params["leaky_relu_negative_slope"],
-                    "leaky_relu_negative_slope",
-                    trial.suggest_float, log=True),
-        "num_groups":
-            4,
+            resolve_minimal(params["leaky_relu_negative_slope"],
+                            "leaky_relu_negative_slope",
+                            trial.suggest_float, log=True),
+
+        # Training parameters
         "batch_size":
-            resolve(params["batch_size"], "batch_size", trial.suggest_int),
+            resolve_minimal(params["batch_size"], "batch_size",
+                            trial.suggest_int),
         "random_seed":
-            resolve(params["random_seed"], "random_seed", trial.suggest_int),
+            resolve_minimal(params["random_seed"], "random_seed",
+                            trial.suggest_int),
     }
 
 
-def objective(
+def minimal_objective(
         data: dict,
         data_split: tuple,
         device: str,
@@ -198,15 +181,16 @@ def objective(
         search_space: dict = None,
         trial_curves: dict = None,
         return_keys: list = ["validation_loss"],
-        reductions: list = [min]
+        reductions: list = [min],
+        trace_length: int = 50
 ) -> float:
     """
-    Objective function for Bayesian optimization.
+    Objective function for MinimalClassifier Bayesian optimization.
 
     Parameters
     ----------
     data : dict
-        Dataset dictionary.
+        Dataset dictionary with 'label' and 'zscore' keys.
     data_split : tuple
         (train_fraction, validation_fraction).
     device : str
@@ -229,6 +213,8 @@ def objective(
         Metric names to return.
     reductions : list of callable
         Reduction function per return key (e.g. min, max).
+    trace_length : int
+        Length of input traces.
 
     Returns
     -------
@@ -237,15 +223,16 @@ def objective(
     """
 
     print("======================================")
-    print(f"         #### Trial {trial.number} ####")
+    print(f"    #### Minimal Trial {trial.number} ####")
     print("======================================\n")
 
     if search_space is None:
-        search_space = get_default_limits()
+        search_space = get_minimal_default_limits()
 
-    params = define_search_space(trial, **search_space)
+    params = define_minimal_search_space(trial, **search_space)
     train_fraction, validation_fraction = data_split
 
+    # Create dataset with augmentation
     dataset = zsc.ZScoreDataset(
         data,
         event_range=None,
@@ -254,6 +241,7 @@ def objective(
         noise_level=params["noise_level"],
     )
 
+    # Split data
     train_loader, valid_loader = zsc.split(
         dataset,
         train_fraction=train_fraction,
@@ -263,39 +251,36 @@ def objective(
         summary=False
     )
 
+    # Calculate class weights for balanced training
     train_labels = torch.tensor(
         [int(label.item()) for _, label in train_loader.dataset],
         dtype=torch.float)
 
     num_pos = (train_labels == 1).sum().float()
     num_neg = (train_labels == 0).sum().float()
-
     pos_weight = num_neg / num_pos
 
+    # Use weighted loss
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-    classifier = zsc.ZScoreClassifier(
-        trace_length=len(dataset[0][0]),
-        dropout=params["dropout"],
-        out_channels_conv1=params["out_channels_conv1"],
-        out_channels_conv2=params["out_channels_conv2"],
-        out_channels_conv3=params["out_channels_conv3"],
-        out_channels_conv4=params["out_channels_conv4"],
-        kernel_size_conv1=params["kernel_size_conv1"],
-        kernel_size_conv2=params["kernel_size_conv2"],
-        kernel_size_conv3=params["kernel_size_conv3"],
-        kernel_size_conv4=params["kernel_size_conv4"],
-        fc1_out_features=params["fc1_out_features"],
-        fc2_out_features=params["fc2_out_features"],
-        pooling_type=params["pooling_type"],
+    # Initialize MinimalClassifier
+    classifier = MinimalClassifier(
+        trace_length=trace_length,
+        conv1_channels=params["conv1_channels"],
+        conv2_channels=params["conv2_channels"],
+        conv1_kernel=params["conv1_kernel"],
+        conv2_kernel=params["conv2_kernel"],
         leaky_relu_negative_slope=params["leaky_relu_negative_slope"],
-        num_groups=params["num_groups"]
+        dropout_rate=params["dropout_rate"],
+        pool_kernel=params["pool_kernel"]
     ).to(device)
 
-    trial.set_user_attr(
-        "n_trainable_params", sum(p.numel() for p in classifier.parameters()))
+    # Log number of parameters
+    n_params = sum(p.numel() for p in classifier.parameters())
+    trial.set_user_attr("n_trainable_params", n_params)
+    print(f"Model has {n_params:,} trainable parameters")
 
-    # Train model
+    # Train model using existing training function
     (
         model,
         train_loss,
@@ -323,7 +308,7 @@ def objective(
         patience=patience
     )
 
-    # Compute logit and probability range on validation set
+    # Evaluate model on validation set
     model.eval()
     n_samples = len(valid_loader.dataset)
     logits = torch.empty(n_samples, 1)
@@ -343,18 +328,22 @@ def objective(
           f"{logits.max().item():.3f} | Median: {logits.median().item():.3f}")
     print(f"Prob  range: {probs.min().item():.3f} to "
           f"{probs.max().item():.3f} | Median: {probs.median().item():.3f}")
+    print(f"Best validation AUC-PR: {validation_auc_pr[-1]:.4f}")
+    print(f"Best validation F1: {max(validation_f1):.4f}")
     print("\n")
 
+    # Save model
     model_save_path = (
         Path(models_destination) /
-        "optimization_models" /
-        f"trial_{trial.number}_model.pth")
+        "minimal_optimization_models" /
+        f"trial_{trial.number}_minimal_model.pth")
     model_save_path.parent.mkdir(parents=True, exist_ok=True)
 
-    trial.set_user_attr("model_path", model_save_path)
+    trial.set_user_attr("model_path", str(model_save_path))
 
-    description = f"Trial {trial.number}: {params}"
+    description = f"Minimal Trial {trial.number}: {params}"
 
+    # Compile results
     results = {
         "train_loss": train_loss,
         "validation_loss": validation_loss,
@@ -369,16 +358,21 @@ def objective(
         "hyperparams": params,
         "valid_probs": probs,
         "description": description,
+        "n_params": n_params,
     }
 
+    # Store trial curves if requested
     if trial_curves is not None:
         trial_curves[trial.number] = results
 
+    # Save complete trial results
     torch.save({
         "model_state_dict": model.state_dict(),
+        "model_architecture": "MinimalClassifier",
         **results
     }, model_save_path)
 
+    # Return requested metrics
     return [
         reduction(results[key])
         for key, reduction in zip(return_keys, reductions)]
