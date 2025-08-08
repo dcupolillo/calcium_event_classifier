@@ -1,7 +1,7 @@
 """ Created on Tue Jul  8 13:33:18 2025
     @author: dcupolillo """
 
-import zscore_classifier as zsc
+import calcium_event_classifier as cec
 from optuna.trial import Trial
 import torch
 import torch.nn as nn
@@ -246,7 +246,7 @@ def objective(
     params = define_search_space(trial, **search_space)
     train_fraction, validation_fraction = data_split
 
-    dataset = zsc.ZScoreDataset(
+    dataset = cec.ZScoreDffDataset(
         data,
         event_range=None,
         augment=True,
@@ -254,7 +254,7 @@ def objective(
         noise_level=params["noise_level"],
     )
 
-    train_loader, valid_loader = zsc.split(
+    train_loader, valid_loader = cec.split(
         dataset,
         train_fraction=train_fraction,
         validation_fraction=validation_fraction,
@@ -274,7 +274,7 @@ def objective(
 
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-    classifier = zsc.ZScoreClassifier(
+    classifier = cec.CalciumEventClassifier(
         trace_length=len(dataset[0][0]),
         dropout=params["dropout"],
         out_channels_conv1=params["out_channels_conv1"],
@@ -308,7 +308,7 @@ def objective(
         validation_auc_pr,
         epoch_features,
         epoch_labels
-    ) = zsc.train(
+    ) = cec.train(
         train_loader=train_loader,
         valid_loader=valid_loader,
         model=classifier,

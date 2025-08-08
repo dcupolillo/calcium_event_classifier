@@ -49,7 +49,7 @@ class ResidualBlock(nn.Module):
         return out + identity
 
 
-class ZScoreClassifier(nn.Module):
+class CalciumEventClassifier(nn.Module):
 
     def __init__(
             self,

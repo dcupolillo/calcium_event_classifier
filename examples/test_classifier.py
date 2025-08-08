@@ -1,14 +1,14 @@
 """ Created on Tue Jul  8 13:16:36 2025
     @author: dcupolillo """
 
-import zscore_classifier as zsc
-import zscore_classifier.core.plot as zsc_plot
+import calcium_event_classifier as cec
+import calcium_event_classifier.core.plot as cec_plot
 from pathlib import Path
 import flammkuchen as fl
 import torch
 import numpy as np
 
-device = zsc.set_device()
+device = cec.set_device()
 
 # Load model
 model_path = Path(
@@ -16,7 +16,7 @@ model_path = Path(
     r"models/trial_22_model.pth")
 checkpoint = torch.load(model_path)
 
-classifier = zsc.ZScoreClassifier(
+classifier = cec.CalciumEventClassifier(
     dropout=checkpoint['hyperparams']["dropout"],
     out_channels_conv1=checkpoint['hyperparams']["out_channels_conv1"],
     out_channels_conv2=checkpoint['hyperparams']["out_channels_conv2"],
@@ -49,12 +49,12 @@ test_data_path = Path(
     r"datasets/test_dataset_250530_ratio_3_1.h5")
 test_data = fl.load(test_data_path)
 
-test_dataset = zsc.ZScoreDataset(
+test_dataset = cec.ZScoreDffDataset(
     test_data,
     augment=False,
 )
 
-test_loader = zsc.load_test_dataset(
+test_loader = cec.load_test_dataset(
     test_dataset,
     batch_size=checkpoint['hyperparams']["batch_size"],
     summary=False)
@@ -62,7 +62,7 @@ test_loader = zsc.load_test_dataset(
 classifier.load_state_dict(checkpoint['model_state_dict'])
 
 # Inference on test dataset
-labels, logits = zsc.get_predictions_and_labels(
+labels, logits = cec.get_predictions_and_labels(
     classifier,
     test_loader,
     device)
@@ -77,11 +77,11 @@ threshold = checkpoint["best_thresholds"][best_f1_idx]
 predicted_classes = (np.array(predictions) >= threshold).astype(int)
 
 # Plot results
-zsc_plot.plot_confusion_matrix(
+cec_plot.plot_confusion_matrix(
     labels,
     predicted_classes,
     classes=["No Event", "Event"])
 
 # Inspect class distribution
-zsc_plot.prob_distribution(
+cec_plot.prob_distribution(
     labels, predictions)

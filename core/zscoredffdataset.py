@@ -7,9 +7,9 @@ from torch.utils.data import Dataset
 import matplotlib.pyplot as plt
 
 
-class ZScoreDataset(Dataset):
+class ZScoreDffDataset(Dataset):
     """
-    Dataset class for Z-scored calcium imaging data.
+    Dataset class for Z-scored and dF/F calcium imaging data.
     This class handles loading and augmenting the data.
     """
 

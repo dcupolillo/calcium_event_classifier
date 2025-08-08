@@ -2,8 +2,8 @@
     @author: dcupolillo """
 
 from pathlib import Path
-import zscore_classifier as zsc
-import zscore_classifier.core.plot as zsc_plot
+import calcium_event_classifier as cec
+import calcium_event_classifier.core.plot as cec_plot
 import flammkuchen as fl
 import torch
 import numpy as np
@@ -11,7 +11,7 @@ from sklearn.metrics import (
     accuracy_score, f1_score, precision_score,
     recall_score)
 
-device = zsc.set_device()
+device = cec.set_device()
 
 # Load model
 model_path = Path(
@@ -29,7 +29,7 @@ for key, value in hyperparams.items():
     print(f"  {key}: {value}")
 
 # Initialize MinimalClassifier
-classifier = zsc.ZScoreClassifier2Ch(
+classifier = cec.CalciumEventClassifier2Ch(
     conv1_channels=hyperparams["conv1_channels"],
     conv2_channels=hyperparams["conv2_channels"],
     conv3_channels=hyperparams["conv3_channels"],
@@ -68,18 +68,18 @@ test_data_path = Path(
     r"datasets/test_dataset_250530_ratio_3_1.h5")
 test_data = fl.load(test_data_path)
 
-test_dataset = zsc.ZScoreDataset(
+test_dataset = cec.ZScoreDataset(
     test_data,
     augment=False,
 )
 
-test_loader = zsc.load_test_dataset(
+test_loader = cec.load_test_dataset(
     test_dataset,
     batch_size=checkpoint['hyperparams']["batch_size"],
     summary=False
 )
 
-labels, logits = zsc.get_predictions_and_labels(
+labels, logits = cec.get_predictions_and_labels(
     classifier,
     test_loader,
     device
@@ -108,14 +108,14 @@ print(f"  Recall:    {test_recall:.4f}")
 
 
 # Confusion matrix
-zsc_plot.plot_confusion_matrix(
+cec_plot.plot_confusion_matrix(
     labels,
     predicted_classes,
     classes=["No Event", "Event"],
 )
 
 # Probability distribution
-zsc_plot.prob_distribution(
+cec_plot.prob_distribution(
     labels,
     predictions,
 )

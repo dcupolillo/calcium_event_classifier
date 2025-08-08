@@ -1,4 +1,4 @@
-from .core.zscoredataset import ZScoreDataset
+from .core.zscoredffdataset import ZScoreDffDataset
 from .core.classifier import ZScoreClassifier
 from .core.classifier_2channels import ZScoreClassifier2Ch
 from .inference.inference import is_calcium_event, load_classifier

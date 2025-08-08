@@ -1,7 +1,7 @@
 """ Created on Tue Jul  8 12:49:18 2025
     @author: dcupolillo """
 
-import zscore_classifier as zsc
+import calcium_event_classifier as cec
 from pathlib import Path
 import flammkuchen as fl
 import torch
@@ -9,8 +9,8 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 
 # Initialize device and random seed for reproducibility
-device = zsc.set_device()
-seed = zsc.set_seed(1000)
+device = cec.set_device()
+seed = cec.set_seed(1000)
 
 # Loss function
 # criterion = nn.BCELoss()
@@ -21,7 +21,7 @@ data_path = Path(
     r"datasets/250729_dataset_2channels_replaced.h5")
 data = fl.load(data_path)
 
-dataset = zsc.ZScoreDataset(
+dataset = cec.ZScoreDffDataset(
     data,
     augment=False,
     normalize_dFF=False,
@@ -31,7 +31,7 @@ dataset = zsc.ZScoreDataset(
 train_fraction, validation_fraction = 0.75, 0.25
 batch_size = 64
 
-train_loader, valid_loader = zsc.split(
+train_loader, valid_loader = cec.split(
     dataset,
     train_fraction=train_fraction,
     validation_fraction=validation_fraction,
@@ -51,7 +51,7 @@ leaky_relu_negative_slope = 0.05
 dropout_rate = 0.1
 pool_kernel = 2
 
-classifier = zsc.ZScoreClassifier2Ch(
+classifier = cec.CalciumEventClassifier2Ch(
     conv1_channels=conv1_channels,
     conv2_channels=conv2_channels,
     conv3_channels=conv3_channels,
@@ -84,7 +84,7 @@ patience = 12
     validation_auc_pr,
     epoch_features,
     epoch_labels,
-) = zsc.train(
+) = cec.train(
     train_loader=train_loader,
     valid_loader=valid_loader,
     model=classifier,
@@ -100,7 +100,7 @@ patience = 12
 )
 
 
-save_path = Path(r"C:/Users/dcupolillo/Desktop/your_model.pth")
+save_path = Path(r"your_model.pth")
 
 # Create dictionary to store
 checkpoint = {

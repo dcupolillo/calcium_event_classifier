@@ -1,7 +1,7 @@
 from pathlib import Path
 import torch
 import numpy as np
-import zscore_classifier as zsc
+import calcium_event_classifier as cec
 
 
 def load_classifier(model_path: str or Path) -> torch.nn.Module:
@@ -21,7 +21,7 @@ def load_classifier(model_path: str or Path) -> torch.nn.Module:
     checkpoint = torch.load(model_path)
     hyperparams = checkpoint['hyperparams']
 
-    model = zsc.ZScoreClassifier2Ch(
+    model = cec.CalciumEventClassifier2Ch2Ch(
         conv1_channels=hyperparams["conv1_channels"],
         conv2_channels=hyperparams["conv2_channels"],
         conv3_channels=hyperparams["conv3_channels"],

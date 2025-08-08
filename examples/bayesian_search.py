@@ -1,8 +1,8 @@
 """ Created on Tue Jul  8 13:28:16 2025
     @author: dcupolillo """
 
-from zscore_classifier.core.optimization_objective import objective
-import zscore_classifier.core.plot as zsc_plot
+from celcium_event_classifier.core.optimization_objective import objective
+import calcium_event_classifier.core.plot as cec_plot
 import optuna
 from pathlib import Path
 import flammkuchen as fl
@@ -56,7 +56,7 @@ training_time = (
 print(f"🕒 Time for optimization: {training_time}")
 
 # Plot search results
-zsc_plot.plot_trial_metrics(trial_curves, [
+cec_plot.plot_trial_metrics(trial_curves, [
     "train_loss",
     "validation_loss",
     "train_f1",
@@ -65,4 +65,4 @@ zsc_plot.plot_trial_metrics(trial_curves, [
     "validation_recall"
 ])
 
-zsc_plot.plot_pr_curves(trial_curves)
+cec_plot.plot_pr_curves(trial_curves)

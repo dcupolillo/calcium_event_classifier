@@ -5,16 +5,16 @@ from pathlib import Path
 import flammkuchen as fl
 import itertools
 import torch
-import zscore_classifier as zsc
+import calcium_event_classifier as cec
 import matplotlib.pyplot as plt
 import numpy as np
 
-device = zsc.set_device()
+device = cec.set_device()
 
 # Load model
 model_path = Path(
     r"models/your_model_with_dff_replaced.pth")
-classifier = zsc.load_classifier(model_path)
+classifier = cec.load_classifier(model_path)
 classifier.to(device)
 classifier.eval()
 
@@ -51,7 +51,7 @@ for n, date in enumerate(folder.iterdir()):
             for n_sweep, (zscore, dff) in enumerate(zip(
                     zscores, dffs)):
 
-                logit, prob = zsc.is_calcium_event(
+                logit, prob = cec.is_calcium_event(
                     zscore, dff, classifier, device)
 
                 logits[n_sweep] = logit
