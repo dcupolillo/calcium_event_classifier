@@ -13,8 +13,7 @@ from .core.utils import (
     load_test_dataset, evaluate_model_on_test,
     get_predictions_and_labels, extract_latent_features)
 from .core.train_loop import train
-# Note: GUI import removed - datasets folder is at project root, not in package
-# To use: from calcium_event_classifier.datasets.build_dataset.GUI import run_app
+from .build_dataset.GUI import run_app
 
 __version__ = "0.1.0"
 __author__ = "Dario Cupolillo"

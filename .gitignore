@@ -126,5 +126,5 @@ cython_debug/
 # dataset files
 *.hdf5
 core/train_model.py
-dataset/*.h5
+datasets/
 models/
