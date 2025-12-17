@@ -19,7 +19,7 @@ class ZScoreDffDataset(Dataset):
             augment: bool = True,
             augment_probability: float = 0.5,
             noise_level: float = 0.5,
-            normalize_dFF: bool = True,
+            baseline_normalize: bool = True,
     ) -> None:
         """
         Initialize the dataset with data and augmentation options.
@@ -34,6 +34,8 @@ class ZScoreDffDataset(Dataset):
             Probability of applying augmentation to each sample.
         noise_level : float
             Standard deviation of the noise added during augmentation.
+        baseline_normalize
+            If True, apply per-trace baseline z-scoring using baseline_range.
         """
 
         self.zscores = torch.tensor(
@@ -46,11 +48,7 @@ class ZScoreDffDataset(Dataset):
         self.augment = augment
         self.augment_probability = augment_probability
         self.noise_level = noise_level
-
-        if normalize_dFF:
-            self.dffs = (
-                self.dffs - self.dffs.min()
-                ) / (self.dffs.max() - self.dffs.min() + 1e-8)
+        self.baseline_normalize = baseline_normalize
 
     def __len__(self):
         return len(self.labels)
@@ -61,14 +59,28 @@ class ZScoreDffDataset(Dataset):
         dff = self.dffs[idx]
         label = self.labels[idx]
 
-        if (self.augment and
-                torch.rand(1).item() < self.augment_probability):
+        if self.baseline_normalize:
+            dff = self._baseline_normalize(dff)
+
+        if (
+                self.augment and
+                torch.rand(1).item() < self.augment_probability
+        ):
             zscore = self.add_noise(zscore)
             dff = self.add_noise(dff)
 
         trace = torch.stack([zscore, dff], dim=0)
 
         return trace, label
+
+    def _baseline_normalize(self, trace: torch.Tensor) -> torch.Tensor:
+        """
+        Z-score a trace using its baseline segment.
+        """
+        baseline = trace[3:15]
+        mean = baseline.mean()
+        std = baseline.std().clamp_min(1e-8)
+        return (trace - mean) / std
 
     def get_labels(self) -> torch.Tensor:
         return self.labels
@@ -78,7 +90,7 @@ class ZScoreDffDataset(Dataset):
         return data + noise
 
     def count(self):
-        return torch.bincount(torch.tensor(self.labels))
+        return torch.bincount(self.labels.to(torch.long))
 
     def __str__(self):
         """
@@ -88,7 +100,7 @@ class ZScoreDffDataset(Dataset):
         """
         num_samples = len(self)
         trace_length = self.zscores.shape[1]
-        labels, counts = np.unique(self.labels, return_counts=True)
+        labels, counts = torch.unique(self.labels, return_counts=True)
         percentages = counts / num_samples * 100
 
         characteristics = [
@@ -109,7 +121,6 @@ class ZScoreDffDataset(Dataset):
 
         for zscore, dff, label in zip(
                 self.zscores, self.dffs, self.labels):
-
 
             axes.flat[0 if label == 0 else 1].plot(
                 zscore, color="lightgray", alpha=0.5)

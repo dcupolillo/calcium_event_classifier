@@ -86,19 +86,12 @@ def split(
          random_state=seed
      )
 
-    # train_sampler = SubsetRandomSampler(train_indices)
-    # val_sampler = SubsetRandomSampler(val_indices)
+    # Data leak sanity check
+    intersection = set(train_indices).intersection(set(val_indices))
+    assert len(intersection) == 0, f"Overlap: {len(intersection)} samples"
 
-    class_counts = torch.bincount(labels)
-    class_weights = 1.0 / class_counts.float()
-    sample_weights = class_weights[labels]
-    train_sample_weights = sample_weights[train_indices]
-
-    train_sampler = WeightedRandomSampler(
-        weights=train_sample_weights,
-        num_samples=len(train_indices),
-        replacement=True
-    )
+    # Already stratified in train_test_split()
+    train_sampler = SubsetRandomSampler(train_indices)
     val_sampler = SubsetRandomSampler(val_indices)
 
     train_loader = DataLoader(
@@ -136,21 +129,22 @@ def split(
 
 
 def load_test_dataset(
-        dataset,
-        batch_size,
-        summary):
+        dataset: dict,
+        batch_size: int,
+        summary: bool = True,
+        shuffle: bool = False):
 
     dataset_size = len(dataset)
     indices = list(range(dataset_size))
-    labels = torch.tensor(
-        [int(dataset[i][1].item()) for i in indices], dtype=torch.long)
 
-    sampler = SubsetRandomSampler(indices)
+    labels = torch.tensor(
+        [int(dataset[i][1].item()) for i in indices],
+        dtype=torch.long)
 
     test_loader = DataLoader(
         dataset,
         batch_size=batch_size,
-        sampler=sampler)
+        shuffle=shuffle)
 
     if summary:
         test_0, test_1 = count_labels(labels, indices)
@@ -194,7 +188,7 @@ def get_predictions_and_labels(
             y_true.extend(target.cpu().numpy().flatten())
             y_pred.extend(predicted.cpu().numpy().flatten())
 
-    return y_true, y_pred
+    return np.array(y_true), np.array(y_pred)
 
 
 def evaluate_model_on_test(
@@ -247,3 +241,52 @@ def evaluate_model_on_test(
         batched_predictions,
         batched_labels,
         batched_raw_outputs)
+
+
+def extract_latent_features(
+        model,
+        data_loader,
+        device
+) -> tuple:
+    """
+    Extracts latent representations from a given dataset using a trained model.
+
+    Args:
+        model: The trained model.
+        data_loader: PyTorch DataLoader for the dataset.
+        device: CUDA or CPU device.
+
+    Returns:
+        features (numpy array): Extracted latent features.
+        labels (numpy array): Corresponding labels.
+    """
+    features_list = []
+    labels_list = []
+    probs_list = []
+
+    model.to(device)
+    model.eval()  # Set to evaluation mode
+    
+    with torch.no_grad():
+        for inputs, labels in data_loader:
+            
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            # Ensure inputs have the correct shape
+            if inputs.dim() == 2:
+                inputs = inputs.unsqueeze(1)
+
+            # Extract features and probability outputs
+            features, probs = model(inputs, return_features=True)
+
+            features_list.append(features.cpu().numpy())
+            labels_list.append(labels.cpu().numpy())
+            probs_list.append(probs.cpu().numpy())
+
+    # Convert to NumPy arrays
+    features = np.concatenate(features_list, axis=0)
+    labels = np.concatenate(labels_list, axis=0)
+    probs = np.concatenate(probs_list, axis=0).flatten()
+
+    return features, labels, probs

@@ -78,10 +78,14 @@ def train(
         Optimal classification threshold per epoch.
     validation_auc_pr : list of float
         AUC-PR score per epoch.
-    epoch_features : list of torch.Tensor or None
+    valid_epoch_features : list of torch.Tensor or None
         Latent features from validation set per epoch (if available).
-    epoch_labels : list of torch.Tensor or None
-        Corresponding labels for latent features (if available).
+    valid_epoch_labels : list of torch.Tensor or None
+        Corresponding labels for validation features (if available).
+    train_epoch_features : list of torch.Tensor or None
+        Latent features from training set per epoch (if available).
+    train_epoch_labels : list of torch.Tensor or None
+        Corresponding labels for training features (if available).
     """
 
     model.to(device)
@@ -105,8 +109,10 @@ def train(
     validation_precision, validation_recall, best_thresholds = [], [], []
     validation_auc_pr = []
 
-    epoch_features = []
-    epoch_labels = []
+    valid_epoch_features = []
+    valid_epoch_labels = []
+    train_epoch_features = []
+    train_epoch_labels = []
 
     best_loss = float('inf')
     best_model = copy.deepcopy(model)
@@ -125,6 +131,7 @@ def train(
         total_train_samples = 0
         all_preds = []
         all_targets = []
+        all_train_feats = []
 
         # Looping through all the traces
         for data, target in tqdm(
@@ -144,12 +151,13 @@ def train(
             optimizer.zero_grad()
 
             # Forward pass
-            logits = model(data)
+            features, logits = model(data, return_features=True)
             loss = criterion(logits, target)
             probs = torch.sigmoid(logits)
 
             l1_norm = compute_l1_regularization(model)
             loss += lambda1 * l1_norm
+            # ...smoothing loss removed...
 
             running_loss += loss.item() * data.size(0)
             total_train_samples += data.size(0)
@@ -159,6 +167,7 @@ def train(
 
             all_preds.extend(probs.detach().cpu().numpy().flatten())
             all_targets.extend(target.detach().cpu().numpy().flatten())
+            all_train_feats.append(features.detach().cpu())
 
         # Compute average loss and prec./recall for training across batches
         avg_train_loss = running_loss / total_train_samples
@@ -166,9 +175,19 @@ def train(
 
         precision, recall, thresholds = precision_recall_curve(
             all_targets, all_preds)
-        f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)
-        best_idx = np.argmax(f1_scores)
-        best_threshold = thresholds[best_idx]
+
+        precision_ = precision[1:]
+        recall_ = recall[1:]
+
+        f1_scores = 2 * (precision_ * recall_) / (precision_ + recall_ + 1e-8)
+
+        if len(thresholds) > 0:
+            best_idx = np.argmax(f1_scores)
+            best_threshold = thresholds[best_idx]
+        else:
+            # degenerate case: all_preds identical; fall back to 0.5
+            best_idx = 0
+            best_threshold = 0.5
 
         binarized_preds = (
             np.array(all_preds) >= best_threshold).astype(int)
@@ -176,13 +195,16 @@ def train(
         train_f1.append(
             f1_score(all_targets, binarized_preds, zero_division=0))
 
+        train_epoch_features.append(torch.cat(all_train_feats))
+        train_epoch_labels.append(torch.tensor(all_targets))
+
         # Validation
         model.eval()
         running_loss = 0.0
         total_valid_samples = 0
         all_preds = []
         all_targets = []
-        all_feats = []
+        all_valid_feats = []
 
         with torch.no_grad():  # Disable gradient calculation for validation
 
@@ -206,7 +228,7 @@ def train(
 
                 all_preds.extend(probs.detach().cpu().numpy().flatten())
                 all_targets.extend(target.detach().cpu().numpy().flatten())
-                all_feats.append(features.cpu())
+                all_valid_feats.append(features.cpu())
 
         # Compute average loss and prec./recall for validation
         avg_valid_loss = running_loss / total_valid_samples
@@ -214,11 +236,22 @@ def train(
 
         precision, recall, thresholds = precision_recall_curve(
             all_targets, all_preds)
-        f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)
 
-        best_idx = np.argmax(f1_scores)
-        best_threshold = thresholds[best_idx]
-        val_f1 = f1_scores[best_idx]
+        precision_ = precision[1:]
+        recall_ = recall[1:]
+
+        f1_scores = 2 * (precision_ * recall_) / (precision_ + recall_ + 1e-8)
+
+        if len(thresholds) > 0:
+            best_idx = np.argmax(f1_scores)
+            best_threshold = thresholds[best_idx]
+            val_f1 = f1_scores[best_idx]
+        else:
+            best_idx = 0
+            best_threshold = 0.5
+            # compute F1 at this fixed threshold for logging
+            bin_preds = (np.array(all_preds) >= best_threshold).astype(int)
+            val_f1 = f1_score(all_targets, bin_preds, zero_division=0)
 
         val_auc_pr = average_precision_score(all_targets, all_preds)
 
@@ -229,8 +262,8 @@ def train(
 
         validation_auc_pr.append(val_auc_pr)
 
-        epoch_features.append(torch.cat(all_feats))
-        epoch_labels.append(torch.tensor(all_targets))
+        valid_epoch_features.append(torch.cat(all_valid_feats))
+        valid_epoch_labels.append(torch.tensor(all_targets))
 
         # Eventually, reduces learning rate
         scheduler.step(avg_valid_loss)
@@ -275,6 +308,8 @@ def train(
         validation_recall,
         best_thresholds,
         validation_auc_pr,
-        epoch_features,
-        epoch_labels
+        valid_epoch_features,
+        valid_epoch_labels,
+        train_epoch_features,
+        train_epoch_labels
     )

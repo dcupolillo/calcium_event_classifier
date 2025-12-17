@@ -1,7 +1,10 @@
-""" Created on Tue Jul  8 12:49:18 2025
+""" Created on Thu Nov 14 2025
     @author: dcupolillo """
 
 import calcium_event_classifier as cec
+from calcium_event_classifier.core.dffdataset import DffDataset
+from calcium_event_classifier.core.classifier_dff import (
+    CalciumEventClassifierDff)
 from pathlib import Path
 import flammkuchen as fl
 import torch
@@ -27,14 +30,14 @@ data_path = Path(
     r"datasets/251114_dataset.h5")
 data = fl.load(data_path)
 
-dataset = cec.ZScoreDffDataset(
+dataset = DffDataset(
     data,
-    augment=True,
+    augment=False,
 )
 
 # Split dataset into training/validation sets
 train_fraction, validation_fraction = 0.75, 0.25
-batch_size = 32
+batch_size = 16
 
 train_loader, valid_loader = cec.split(
     dataset,
@@ -44,18 +47,22 @@ train_loader, valid_loader = cec.split(
     seed=seed,
     summary=False)
 
-input_channels = 2
+
+
+input_channels = 1
 conv1_channels = 16
 conv2_channels = 32
 conv3_channels = 64
-conv1_kernel = 3
+conv1_kernel = 5
 conv2_kernel = 3
 conv3_kernel = 2
 leaky_relu_negative_slope = 0.05
 dropout_rate = 0.1
 pool_kernel = 2
 
-classifier = cec.CalciumEventClassifier2Ch(
+classifier = CalciumEventClassifierDff(
+    trace_length=len(dataset[0][0][0]),  # Get trace length from first sample
+    input_channels=input_channels,
     conv1_channels=conv1_channels,
     conv2_channels=conv2_channels,
     conv3_channels=conv3_channels,
@@ -86,8 +93,10 @@ patience = 8
     validation_recall,
     best_thresholds,
     validation_auc_pr,
-    epoch_features,
-    epoch_labels,
+    valid_epoch_features,
+    valid_epoch_labels,
+    train_epoch_features,
+    train_epoch_labels,
 ) = cec.train(
     train_loader=train_loader,
     valid_loader=valid_loader,
@@ -100,11 +109,11 @@ patience = 8
     lr_drop_patience=lr_drop_patience,
     lambda1=lambda1,
     lambda2=lambda2,
-    patience=patience
+    patience=patience,
 )
 
 
-save_path = Path(rf"{today}_model.pth")
+save_path = Path(rf"{today}_model_dff.pth")
 
 # Create dictionary to store
 checkpoint = {
@@ -118,8 +127,10 @@ checkpoint = {
     "validation_recall": validation_recall,
     "best_thresholds": best_thresholds,
     "validation_auc_pr": validation_auc_pr,
-    "epoch_features": epoch_features,
-    "epoch_labels": epoch_labels,
+    "valid_epoch_features": valid_epoch_features,
+    "valid_epoch_labels": valid_epoch_labels,
+    "train_epoch_features": train_epoch_features,
+    "train_epoch_labels": train_epoch_labels,
     "hyperparams": {
         "learning_rate": learning_rate,
         "lr_drop_factor": lr_drop_factor,
@@ -136,10 +147,11 @@ checkpoint = {
         "conv2_kernel": conv2_kernel,
         "conv3_kernel": conv3_kernel,
         "pool_kernel": pool_kernel,
-        "dropout_rate": dropout_rate,
+        "dropout": dropout_rate,
         "leaky_relu_negative_slope": leaky_relu_negative_slope,
         "batch_size": batch_size,
         "random_seed": seed,
+        "use_dff_only": True,
     }
 }
 
@@ -154,5 +166,5 @@ ax.plot(checkpoint["train_f1"])
 ax.plot(checkpoint["validation_f1"])
 ax.set_xlabel("Epoch")
 ax.set_ylabel("Loss / F1 Score")
-ax.set_title("Training and Validation Loss and F1 Score")
+ax.set_title("Training and Validation Loss and F1 Score (dFF only)")
 ax.legend(["Train Loss", "Validation Loss", "Train F1", "Validation F1"])

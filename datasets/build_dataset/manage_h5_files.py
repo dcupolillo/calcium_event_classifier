@@ -104,6 +104,8 @@ def merge_h5(
         raise KeyError("Both files must contain 'label' key.")
     if 'zscore' not in h5_file_1 or 'zscore' not in h5_file_2:
         raise KeyError("Both files must contain 'zscore' key.")
+    if 'dff' not in h5_file_1 or 'zscore' not in h5_file_2:
+        raise KeyError("Both files must contain 'dff' key.")
 
     merged_labels = np.concatenate(
         [h5_file_1['label'],
@@ -113,18 +115,23 @@ def merge_h5(
         [h5_file_1['zscore'],
          h5_file_2['zscore']])
 
+    merged_dff = np.concatenate(
+        [h5_file_1['dff'],
+         h5_file_2['dff']])
+
     h5_dictionary = {
         'label': merged_labels,
-        'zscore': merged_z_scores
+        'zscore': merged_z_scores,
+        'dff': merged_dff
     }
 
     return h5_dictionary
 
 
 # Usage
-file_path_1 = Path(r"datasets/250724_dataset_filtered.h5")
-file_path_2 = Path(r"datasets/unfiltered_zscores.h5")
-output_filename = Path(r"datasets/250725_merged_dataset.h5")
+file_path_1 = Path(r"C:/Users/dcupolillo/Projects/calcium_event_classifier/datasets/251016_test_dataset.h5_0only")
+file_path_2 = Path(r"C:/Users/dcupolillo/Projects/calcium_event_classifier/datasets/251114_test_dataset.h5_1only")
+output_filename = Path(r"mixed.h5")
 
 h5_dictionary = merge_h5(file_path_1, file_path_2)
 fl.save(output_filename, h5_dictionary)
@@ -134,7 +141,7 @@ fl.save(output_filename, h5_dictionary)
 
 
 def find_duplicates(
-        h5_path: str or Path
+        data: dict
 ) -> list:
     """
     Finds the indices of duplicate traces within a dataset.
@@ -151,12 +158,10 @@ def find_duplicates(
         The list of duplicate indices.
 
     """
-    if not isinstance(h5_path, (str, Path)):
-        raise TypeError("Input must be a string or a Path object.")
+    if not isinstance(data, dict):
+        raise TypeError("Input must be a dictionary.")
 
-    h5_file = fl.load(h5_path)
-
-    z_scores = h5_file['zscore']
+    z_scores = data['zscore']
     traces_as_tuples = [tuple(trace) for trace in z_scores]
 
     unique_traces = set()
@@ -169,6 +174,8 @@ def find_duplicates(
         else:
             unique_traces.add(trace)
             unique_index.append(i)
+
+    print(f"Found {len(duplicates_index)} duplicates.")
 
     return unique_index
 
@@ -191,27 +198,30 @@ def remove_duplicates(
         The resulting dictionary without duplicates.
 
     """
+    data = fl.load(h5_file)
     # Get indices of unique traces
-    unique_index = find_duplicates(h5_file)
+    unique_index = find_duplicates(data)
 
     # Filter the arrays using unique indices
-    unique_labels = h5_file['label'][unique_index]
-    unique_z_scores = h5_file['zscore'][unique_index]
+    unique_labels = data['label'][unique_index]
+    unique_z_scores = data['zscore'][unique_index]
+    unique_dff = data['dff'][unique_index]
 
     # Create new dictionary with unique entries
     unique_data = {
         'label': unique_labels,
-        'zscore': unique_z_scores
+        'zscore': unique_z_scores,
+        'dff': unique_dff
     }
 
     return unique_data
 
 
 # Usage
-file_path = Path(r"zscore_labels.h5")
+file_path = Path(r"C:/Users/dcupolillo/Projects/calcium_event_classifier/examples/251114_test_dataset.h5")
 unique_file = remove_duplicates(file_path)
 
-fl.save("unique_zscore_labels.h5", unique_file)
+fl.save("251114_dataset.h5", unique_file)
 
 
 # %%
@@ -254,11 +264,12 @@ def reduce_class_entries(
     if 'label' not in h5_file or 'zscore' not in h5_file:
         raise KeyError("Input file must contain 'label' and 'zscore' keys.")
 
-    if not isinstance(target_count, int) or target_count <= 0:
-        raise ValueError("target_count must be a positive integer.")
+    # if not isinstance(target_count, int) or target_count <= 0:
+    #     raise ValueError("target_count must be a positive integer.")
 
     labels = h5_file['label']
     z_scores = h5_file['zscore']
+    dff = h5_file['dff']
 
     # Identify indices by class
     target_indices = np.where(labels == label)[0]
@@ -281,15 +292,16 @@ def reduce_class_entries(
     # Filter the arrays
     reduced_data = {
         'label': labels[final_indices],
-        'zscore': z_scores[final_indices]
+        'zscore': z_scores[final_indices],
+        'dff': dff[final_indices]
     }
 
     return reduced_data
 
 
-file_path = Path(r"datasets/250724_dataset_filtered1.h5")
-reduced = reduce_class_entries(file_path, label=0, target_count=1000)
-fl.save("datasets/250724_dataset_equal_classes.h5", reduced)
+file_path = Path(r"C:/Users/dcupolillo/Projects/calcium_event_classifier/datasets/251016_test_dataset.h5")
+reduced = reduce_class_entries(file_path, label=1, target_count=0)
+fl.save("C:/Users/dcupolillo/Projects/calcium_event_classifier/datasets/251016_test_dataset.h5_0only", reduced)
 
 
 # %% Examine a dataset
@@ -408,7 +420,7 @@ def examine_h5(
 
 
 # Usage
-file_path = Path(r"datasets/250729_dataset_2channels.h5")
+file_path = Path(r"C:/Users/dcupolillo/Projects/calcium_event_classifier/examples/251114_test_dataset.h5")
 examine_h5(file_path)
 
 

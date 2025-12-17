@@ -13,14 +13,14 @@ device = cec.set_device()
 # Load model
 model_path = Path(
     # r"models/unfiltered_model.pth")
-    r"models/trial_22_model.pth")
+    r"C:/Users/dcupolillo/Projects/calcium_event_classifier/models/251114_model_dff.pth")
 checkpoint = torch.load(model_path)
 
 classifier = cec.CalciumEventClassifier(
     dropout=checkpoint['hyperparams']["dropout"],
-    out_channels_conv1=checkpoint['hyperparams']["out_channels_conv1"],
-    out_channels_conv2=checkpoint['hyperparams']["out_channels_conv2"],
-    out_channels_conv3=checkpoint['hyperparams']["out_channels_conv3"],
+    out_channels_conv1=checkpoint['hyperparams']["conv1_channels"],
+    out_channels_conv2=checkpoint['hyperparams']["conv2_channels"],
+    out_channels_conv3=checkpoint['hyperparams']["conv3_channels"],
     out_channels_conv4=checkpoint['hyperparams']["out_channels_conv4"],
     kernel_size_conv1=checkpoint['hyperparams']["kernel_size_conv1"],
     kernel_size_conv2=checkpoint['hyperparams']["kernel_size_conv2"],
