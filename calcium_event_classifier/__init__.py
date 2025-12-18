@@ -7,7 +7,7 @@ from .core.classifier import CalciumEventClassifier
 from .core.dffdataset import DffDataset
 from .core.classifier_dff import CalciumEventClassifierDff
 from .core.classifier_2channels import CalciumEventClassifier2Ch
-from .inference.inference import is_calcium_event, load_classifier, load_classifier_dff
+from .core.inference import is_calcium_event, load_classifier, load_classifier_dff
 from .core.utils import (
     set_device, set_seed, split,
     load_test_dataset, evaluate_model_on_test,
