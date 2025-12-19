@@ -47,8 +47,8 @@ Homepage = "https://github.com/dcupolillo/calcium_event_classifier"
 Repository = "https://github.com/dcupolillo/calcium_event_classifier.git"
 Documentation = "https://github.com/dcupolillo/calcium_event_classifier/blob/main/README.md"
 
-[tool.setuptools]
-packages = ["calcium_event_classifier"]
+[tool.setuptools.packages.find]
+where = ["."]
 
 [tool.setuptools.package-data]
 calcium_event_classifier = ["py.typed"]
