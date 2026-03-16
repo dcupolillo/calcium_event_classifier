@@ -7,6 +7,7 @@
 
 import sys
 import numpy as np
+import random
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton,
@@ -62,6 +63,11 @@ class ManualAnnotationViewer(QMainWindow):
             raise ValueError("Data dict does not contain expected keys (dff, trace, etc.)")
         
         self.save_path = Path(save_path) if save_path else Path('annotated_traces.h5')
+        
+        # Shuffle trace order while maintaining annotation relationships
+        self.shuffled_indices = list(range(len(self.traces)))
+        random.shuffle(self.shuffled_indices)
+        
         self.current_index = 0
         self.labels = []
         self.annotated_traces = []
@@ -146,7 +152,9 @@ class ManualAnnotationViewer(QMainWindow):
             self.figure_current.clear()
             ax = self.figure_current.add_subplot(111)
             
-            trace = self.traces[self.current_index]
+            # Access trace using shuffled index
+            original_idx = self.shuffled_indices[self.current_index]
+            trace = self.traces[original_idx]
             x_data = np.arange(len(trace))
             
             # Plot the trace
@@ -179,8 +187,8 @@ class ManualAnnotationViewer(QMainWindow):
     
     def update_summary_plots(self):
         """Update the summary plots showing labeled traces."""
-        label_0_indices = [i for i, lbl in enumerate(self.labels) if lbl == 0]
-        label_1_indices = [i for i, lbl in enumerate(self.labels) if lbl == 1]
+        label_0_indices = [i for i, (lbl, _) in enumerate(self.labels) if lbl == 0]
+        label_1_indices = [i for i, (lbl, _) in enumerate(self.labels) if lbl == 1]
         
         label_0_traces = [self.annotated_traces[i] for i in label_0_indices]
         label_1_traces = [self.annotated_traces[i] for i in label_1_indices]
@@ -237,13 +245,14 @@ class ManualAnnotationViewer(QMainWindow):
         """Update the counter display."""
         labeled_count = len(self.labels)
         progress = f"{labeled_count} / {len(self.traces)}"
-        counter_text = f"Progress: {progress}\nLabel 0: {sum(1 for l in self.labels if l == 0)} | Label 1: {sum(1 for l in self.labels if l == 1)}"
+        counter_text = f"Progress: {progress}\nLabel 0: {sum(1 for lbl, _ in self.labels if lbl == 0)} | Label 1: {sum(1 for lbl, _ in self.labels if lbl == 1)}"
         self.counter_label.setText(counter_text)
     
     def make_decision(self, label: int):
         """Record a label decision and advance to next trace."""
-        self.labels.append(label)
-        self.annotated_traces.append(self.traces[self.current_index])
+        original_idx = self.shuffled_indices[self.current_index]
+        self.labels.append((label, original_idx))
+        self.annotated_traces.append(self.traces[original_idx])
         self.update_summary_plots()
         self.next_trace()
     
@@ -277,9 +286,17 @@ class ManualAnnotationViewer(QMainWindow):
                 self, 'Warning', 'No traces have been labeled. Cannot save.')
             return
         
+        # Reorder labels and traces back to original order
+        original_labels = [None] * len(self.labels)
+        original_traces = [None] * len(self.annotated_traces)
+        
+        for i, (label, original_idx) in enumerate(self.labels):
+            original_labels[original_idx] = label
+            original_traces[original_idx] = self.annotated_traces[i]
+        
         data = {
-            'label': np.array(self.labels),
-            'trace': np.array(self.annotated_traces)
+            'label': np.array(original_labels),
+            'trace': np.array(original_traces)
         }
         
         # Create parent directory if it doesn't exist
@@ -287,8 +304,8 @@ class ManualAnnotationViewer(QMainWindow):
         
         fl.save(str(self.save_path), data)
         
-        num_labels_0 = sum(1 for l in self.labels if l == 0)
-        num_labels_1 = sum(1 for l in self.labels if l == 1)
+        num_labels_0 = sum(1 for l in original_labels if l == 0)
+        num_labels_1 = sum(1 for l in original_labels if l == 1)
         
         print(f"\n{'='*60}")
         print(f"ANNOTATION COMPLETE")
