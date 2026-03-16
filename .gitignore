@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 *.so
 
+# Archived old approaches and models
+old/
+
 # Distribution / packaging
 .Python
 build/
