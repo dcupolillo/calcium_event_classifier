@@ -11,7 +11,7 @@ requires-python = ">=3.8"
 authors = [
     {name = "Dario Cupolillo"}
 ]
-license = "MIT"
+license = {text = "MIT"}
 keywords = ["calcium imaging", "deep learning", "neural networks", "classification"]
 classifiers = [
     "Development Status :: 3 - Alpha",
