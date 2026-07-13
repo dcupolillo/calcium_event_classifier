@@ -1,5 +1,5 @@
 # Calcium event classifier
-[![DOI](https://sandbox.zenodo.org/badge/1017914264.svg)](https://handle.test.datacite.org/10.5072/zenodo.518966)
+[![DOI](https://zenodo.org/badge/1017914264.svg)](https://doi.org/10.5281/zenodo.21334889)
 
 ## Description
 

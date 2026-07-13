@@ -10,5 +10,6 @@ authors:
 
 repository-code: "https://github.com/dcupolillo/calcium_event_classifier"
 
+doi: 10.5281/zenodo.21334889
 version: 1.0.1
 license: GPL-3.0
