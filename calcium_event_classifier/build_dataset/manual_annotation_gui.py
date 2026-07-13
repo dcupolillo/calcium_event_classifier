@@ -159,7 +159,7 @@ class ManualAnnotationViewer(QMainWindow):
             
             # Plot the trace
             ax.plot(x_data, trace, color='steelblue', linewidth=2)
-            ax.fill_between(x_data, trace, alpha=0.3, color='steelblue')
+            # ax.fill_between(x_data, trace, alpha=0.3, color='steelblue')
             
             # Mark baseline region (first 16 samples)
             ax.axvline(16, color='red', linestyle='--', linewidth=1.5, 
@@ -170,6 +170,7 @@ class ManualAnnotationViewer(QMainWindow):
             ax.set_ylabel('Value', fontsize=11)
             ax.set_title(f"Trace {self.current_index + 1} / {len(self.traces)}", 
                         fontsize=12, fontweight='bold')
+            ax.set_ylim(-1, 5)
             ax.grid(True, alpha=0.3)
             ax.legend(fontsize=10)
             
@@ -208,7 +209,7 @@ class ManualAnnotationViewer(QMainWindow):
         
         ax0.set_title(f'Label 0 - No Event ({len(label_0_traces)} traces)', 
                      fontsize=11, fontweight='bold')
-        ax0.set_ylim(-5, 5)
+        ax0.set_ylim(0, 5)
         ax0.set_xlabel('Time (samples)', fontsize=10)
         ax0.grid(True, alpha=0.3)
         if label_0_traces:
@@ -232,7 +233,7 @@ class ManualAnnotationViewer(QMainWindow):
         
         ax1.set_title(f'Label 1 - Event ({len(label_1_traces)} traces)', 
                      fontsize=11, fontweight='bold')
-        ax1.set_ylim(-5, 5)
+        ax1.set_ylim(0, 5)
         ax1.set_xlabel('Time (samples)', fontsize=10)
         ax1.grid(True, alpha=0.3)
         if label_1_traces:
@@ -287,16 +288,16 @@ class ManualAnnotationViewer(QMainWindow):
             return
         
         # Reorder labels and traces back to original order
-        original_labels = [None] * len(self.labels)
-        original_traces = [None] * len(self.annotated_traces)
+        original_labels = [None] * len(self.traces)
+        original_traces = [None] * len(self.traces)
         
         for i, (label, original_idx) in enumerate(self.labels):
             original_labels[original_idx] = label
             original_traces[original_idx] = self.annotated_traces[i]
         
         data = {
-            'label': np.array(original_labels),
-            'trace': np.array(original_traces)
+            'label': np.array(original_labels, dtype=object),
+            'trace': np.array(original_traces, dtype=object)
         }
         
         # Create parent directory if it doesn't exist
@@ -316,7 +317,8 @@ class ManualAnnotationViewer(QMainWindow):
         print(f"  Label 1 (Event):    {num_labels_1}")
         print(f"{'='*60}\n")
         
-        sys.exit()
+        # Close the window gracefully instead of exiting the process
+        self.close()
 
 
 def run_manual_annotation(data: dict = None, save_path: str = None):
